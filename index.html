@@ -1,394 +1,598 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TERMINAL OVERRIDE // 03:00</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>SYSTEM_FAILURE // DEAD_SIGNAL</title>
 <style>
-  :root {
-    --bg-color: #020402;
-    --text-green: #00ff41;
-    --text-dim: #008f11;
-    --alert-red: #ff3333;
-    --cyan-accent: #00ffff;
-  }
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
 
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
+:root {
+  --blood: #8b0000;
+  --bright-red: #ff0033;
+  --static-white: #e6e6e6;
+  --dark-bg: #030000;
+}
 
-  body {
-    background-color: var(--bg-color);
-    color: var(--text-green);
-    font-family: 'Courier New', Courier, monospace;
-    overflow: hidden;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    user-select: none;
-  }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  /* CRT Scanline & Glow Overlay */
-  body::before {
-    content: " ";
-    display: block;
-    position: absolute;
-    top: 0; left: 0; bottom: 0; right: 0;
-    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
-                linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-    z-index: 10;
-    background-size: 100% 2px, 3px 100%;
-    pointer-events: none;
-  }
+html, body {
+  width: 100%;
+  height: 100%;
+  background: var(--dark-bg);
+  color: var(--static-white);
+  font-family: 'Share Tech Mono', monospace;
+  overflow: hidden;
+  user-select: none;
+}
 
-  /* Header Bar */
-  header {
-    height: 50px;
-    border-bottom: 2px solid var(--text-dim);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 20px;
-    font-weight: bold;
-    background: #000c00;
-  }
+/* CRT Distortions */
+#screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+  background: #000;
+}
 
-  .status-tag {
-    color: var(--alert-red);
-    animation: blink 0.8s infinite alternate;
-  }
+#scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.7) 50%),
+              linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size: 100% 3px, 6px 100%;
+}
 
-  #timer {
-    color: var(--cyan-accent);
-    font-size: 1.2rem;
-    letter-spacing: 2px;
-  }
+#vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 51;
+  background: radial-gradient(circle at center, transparent 35%, rgba(0, 0, 0, 0.95) 90%);
+}
 
-  /* Main Workspace */
-  main {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    grid-template-rows: 1fr 140px;
-    gap: 10px;
-    padding: 10px;
-    overflow: hidden;
-  }
+#blood-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  background: radial-gradient(circle, transparent 60%, rgba(139, 0, 0, 0.4) 100%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
 
-  .panel {
-    border: 1px solid var(--text-dim);
-    background: rgba(0, 10, 0, 0.6);
-    padding: 10px;
-    position: relative;
-    overflow: hidden;
-  }
+/* Terminal & Face Feed Canvas */
+#cam-feed {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  opacity: 0;
+  z-index: 10;
+  filter: contrast(250%) grayscale(100%) brightness(40%) invert(10%);
+  pointer-events: none;
+  mix-blend-mode: screen;
+  transition: opacity 1.5s ease-in;
+}
 
-  .panel-title {
-    position: absolute;
-    top: 4px;
-    right: 8px;
-    font-size: 0.75rem;
-    color: var(--text-dim);
-    letter-spacing: 1px;
-  }
+#terminal {
+  position: relative;
+  z-index: 20;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column-reverse;
+  font-size: clamp(12px, 3.4vw, 15px);
+  line-height: 1.35;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+}
 
-  /* Logs Stream */
-  #log-stream {
-    overflow-y: hidden;
-    display: flex;
-    flex-direction: column-reverse;
-    font-size: 0.9rem;
-    line-height: 1.4;
-  }
+.line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-bottom: 2px;
+}
+.red { color: var(--bright-red); text-shadow: 0 0 8px var(--bright-red); font-weight: bold; }
+.blood { color: var(--blood); font-weight: bold; }
+.dim { color: #555; }
+.whisper { color: #777; font-style: italic; font-size: 0.9em; }
 
-  .log-line {
-    white-space: pre;
-    text-shadow: 0 0 3px var(--text-green);
-  }
-  .log-red { color: var(--alert-red); text-shadow: 0 0 4px var(--alert-red); }
-  .log-cyan { color: var(--cyan-accent); }
+/* Subliminal Face Flashes */
+#jumpscare {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 100;
+  display: none;
+  justify-content: center;
+  align-items: center;
+}
 
-  /* Hex Memory Matrix */
-  #hex-dump {
-    font-size: 0.8rem;
-    line-height: 1.25;
-    color: var(--text-dim);
-    overflow: hidden;
-  }
+#skull-art {
+  font-family: monospace;
+  white-space: pre;
+  color: var(--bright-red);
+  font-size: clamp(8px, 1.8vw, 12px);
+  line-height: 1;
+  text-shadow: 0 0 15px var(--bright-red);
+  transform: scale(1.1);
+}
 
-  /* Bottom Visuals */
-  #progress-panel {
-    grid-column: span 2;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-  }
+/* Header & Timer */
+#status-bar {
+  position: relative;
+  z-index: 25;
+  border-bottom: 1px solid #330000;
+  padding-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
 
-  .meter-container {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
+#rec-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--bright-red);
+  font-weight: bold;
+}
 
-  .meter-label {
-    width: 220px;
-    font-size: 0.85rem;
-  }
+#rec-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--bright-red);
+  border-radius: 50%;
+  animation: pulse 0.7s infinite alternate;
+}
 
-  .meter-track {
-    flex: 1;
-    height: 14px;
-    border: 1px solid var(--text-dim);
-    position: relative;
-    background: #000;
-  }
+#timer {
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+  color: var(--bright-red);
+  font-weight: bold;
+}
 
-  .meter-fill {
-    height: 100%;
-    width: 0%;
-    background-color: var(--text-green);
-    box-shadow: 0 0 8px var(--text-green);
-    transition: width 0.2s linear;
-  }
+/* Noise Canvas */
+#noise {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  opacity: 0.08;
+}
 
-  /* Start Screen Overlay */
-  #boot-overlay {
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: #000;
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-  }
+/* Animations */
+@keyframes pulse {
+  0% { opacity: 0.2; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1.1); }
+}
 
-  button {
-    background: transparent;
-    border: 2px solid var(--text-green);
-    color: var(--text-green);
-    font-family: inherit;
-    font-size: 1.2rem;
-    padding: 14px 28px;
-    cursor: pointer;
-    box-shadow: 0 0 10px rgba(0, 255, 65, 0.4);
-    letter-spacing: 2px;
-  }
+body.violent-shake {
+  animation: vshake 0.05s infinite;
+}
+@keyframes vshake {
+  0% { transform: translate(-3px, 2px) skewX(2deg); filter: invert(20%); }
+  50% { transform: translate(3px, -2px) skewX(-2deg); }
+  100% { transform: translate(-2px, -3px); }
+}
 
-  button:hover {
-    background: var(--text-green);
-    color: #000;
-  }
+#start-curtain {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 24px;
+}
 
-  @keyframes blink {
-    from { opacity: 1; }
-    to { opacity: 0.2; }
-  }
+#start-curtain h1 {
+  font-size: 2.2rem;
+  color: var(--bright-red);
+  letter-spacing: 6px;
+  margin-bottom: 12px;
+  text-shadow: 0 0 10px var(--bright-red);
+}
+
+#start-curtain p {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 28px;
+}
+
+#init-btn {
+  background: transparent;
+  border: 1px solid var(--bright-red);
+  color: var(--bright-red);
+  padding: 16px 42px;
+  font-family: inherit;
+  font-size: 1.1rem;
+  letter-spacing: 3px;
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(255, 0, 51, 0.4);
+}
 </style>
 </head>
 <body>
 
-<div id="boot-overlay">
-  <div style="font-size: 1.5rem; letter-spacing: 3px;">TERMINAL INTERFACE INITIALIZATION</div>
-  <p style="color: #666;">Audio synthesis requires user activation.</p>
-  <button id="start-btn">INITIALIZE RUN (03:00)</button>
+<canvas id="noise"></canvas>
+<div id="scanlines"></div>
+<div id="vignette"></div>
+<div id="blood-overlay"></div>
+<video id="cam-feed" autoplay playsinline muted></video>
+
+<div id="jumpscare">
+  <pre id="skull-art"></pre>
 </div>
 
-<header>
-  <div>NODE: <span class="log-cyan">SEC-TERMINAL-0x49</span></div>
-  <div class="status-tag">[EXECUTION IN PROGRESS]</div>
-  <div id="timer">03:00</div>
-</header>
-
-<main>
-  <div class="panel" id="log-stream">
-    <div class="panel-title">// EVENT_BUFFER</div>
+<div id="screen">
+  <div id="status-bar">
+    <div id="rec-indicator"><div id="rec-dot"></div> FEED INTERCEPT: ACTIVE</div>
+    <div id="timer">03:00</div>
   </div>
 
-  <div class="panel" id="hex-dump">
-    <div class="panel-title">// RAW_STREAM</div>
-  </div>
+  <div id="terminal"></div>
+</div>
 
-  <div class="panel" id="progress-panel">
-    <div class="panel-title">// SYSTEM_INSTRUMENTATION</div>
-    
-    <div class="meter-container">
-      <div class="meter-label">OVERALL SIMULATION</div>
-      <div class="meter-track">
-        <div id="total-progress" class="meter-fill"></div>
-      </div>
-      <span id="total-pct">0%</span>
-    </div>
-
-    <div class="meter-container">
-      <div class="meter-label">NODE COMPILATION</div>
-      <div class="meter-track">
-        <div id="stage-progress" class="meter-fill" style="background-color: var(--cyan-accent); box-shadow: 0 0 8px var(--cyan-accent);"></div>
-      </div>
-      <span id="stage-pct">0%</span>
-    </div>
-  </div>
-</main>
+<div id="start-curtain">
+  <h1>SIGNAL INTERCEPT</h1>
+  <p>AUDIO & SENSORS REQUIRED. PUT HEADPHONES ON.</p>
+  <button id="init-btn">ESTABLISH UPLINK</button>
+</div>
 
 <script>
-  const DURATION_SECONDS = 180; // Exactly 3 minutes
-  let remainingTime = DURATION_SECONDS;
-  let audioCtx = null;
-  let timerInterval = null;
+(() => {
+'use strict';
 
-  // Sound Engine (Web Audio API Synthesizer)
-  function initAudio() {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const RUN_TIME = 180; // 3 minutes exact
+let timeLeft = RUN_TIME;
+const term = document.getElementById('terminal');
+const timerEl = document.getElementById('timer');
+const camFeed = document.getElementById('cam-feed');
+const bloodOverlay = document.getElementById('blood-overlay');
+const jumpscare = document.getElementById('jumpscare');
+const skullArt = document.getElementById('skull-art');
+
+// Disturbing ASCII Entity Art
+const DEMON_FACE = `
+                   .---.
+                 /       \\
+                |  () ()  |
+                 \\   ^   /
+                  |||||||
+              .-------------..
+             /     WATCHING     \\
+            /   YOU BREATHE      \\
+           |                      |
+           |  I AM IN THE WIRES   |
+            \\                    /
+             '------------------'
+`;
+
+const SKULL_STARE = `
+            .ed"""" """$$$$be.
+          -"           ^""**$$$e.
+        ."                   '$$$c
+       /                      "4$$b
+      d  0                      0$$
+      $  *                   .$$$$$$
+     .$  ^c           $$$$$e$$$$$$$$.
+     d$L  4.         4$$$$$$$$$$$$$$b
+     $$$$b ^ceeeee.  4$$ECL.F*$$$$$$$
+ e$""=. $$$$$$d$$$$$$$d  $$$$$$$d$$$$$$$P
+ $---   *$$$$$$$$$$$$$$  "$$$$$$$###$$$"
+         "$$$C***$$$$*"    "$$$$$$$$$$"
+          ^r" =*""         '$$$$$$$$$P
+           '                 "$$$$$$P
+`;
+
+// Web Audio API Synthesizer (Zero external links)
+let ctx = null;
+
+function initAudio() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  startSubBassDrone();
+}
+
+function startSubBassDrone() {
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(32, ctx.currentTime); // Infrasonic feeling
+
+  osc2.type = 'sine';
+  osc2.frequency.setValueAtTime(35.5, ctx.currentTime); // Dissonant beating wave
+
+  gain.gain.setValueAtTime(0.18, ctx.currentTime);
+
+  osc.connect(gain);
+  osc2.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc2.start();
+}
+
+function playHeartbeat() {
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(55, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(25, ctx.currentTime + 0.18);
+
+  gain.gain.setValueAtTime(0.7, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.2);
+
+  // Secondary pulse (lub-dub)
+  setTimeout(() => {
+    if (!ctx) return;
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(45, ctx.currentTime);
+    osc2.frequency.exponentialRampToValueAtTime(20, ctx.currentTime + 0.25);
+    gain2.gain.setValueAtTime(0.6, ctx.currentTime);
+    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start();
+    osc2.stop(ctx.currentTime + 0.26);
+  }, 220);
+}
+
+function playStabStatic(duration = 0.3) {
+  if (!ctx) return;
+  const n = Math.floor(ctx.sampleRate * duration);
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1);
+
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.4, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+  src.connect(gain);
+  gain.connect(ctx.destination);
+  src.start();
+}
+
+function ttsWhisper(text, pitch = 0.1, rate = 0.65) {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.pitch = pitch;
+    u.rate = rate;
+    window.speechSynthesis.speak(u);
+  } catch(e) {}
+}
+
+function logLine(text, cls = '') {
+  const d = document.createElement('div');
+  d.className = 'line ' + cls;
+  d.textContent = text;
+  term.insertBefore(d, term.firstChild);
+  while (term.children.length > 40) term.removeChild(term.lastChild);
+}
+
+// Subliminal Jump Flash
+function triggerFlash(art, ms = 220) {
+  skullArt.textContent = art;
+  jumpscare.style.display = 'flex';
+  document.body.classList.add('violent-shake');
+  playStabStatic(ms / 1000);
+  try { if (navigator.vibrate) navigator.vibrate([100, 50, 150]); } catch(e) {}
+
+  setTimeout(() => {
+    jumpscare.style.display = 'none';
+    document.body.classList.remove('violent-shake');
+  }, ms);
+}
+
+// Background Noise Canvas
+const noiseCanvas = document.getElementById('noise');
+const nctx = noiseCanvas.getContext('2d');
+function resizeNoise() {
+  noiseCanvas.width = window.innerWidth / 3;
+  noiseCanvas.height = window.innerHeight / 3;
+}
+window.addEventListener('resize', resizeNoise);
+resizeNoise();
+
+function renderNoise() {
+  const imgData = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const val = Math.random() * 255;
+    d[i] = val; d[i+1] = val; d[i+2] = val; d[i+3] = 255;
   }
+  nctx.putImageData(imgData, 0, 0);
+  requestAnimationFrame(renderNoise);
+}
+requestAnimationFrame(renderNoise);
 
-  function playTone(freq, duration, type = 'square', volume = 0.03) {
-    if (!audioCtx) return;
-    try {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      
-      gain.gain.setValueAtTime(volume, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-      
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      
-      osc.start();
-      osc.stop(audioCtx.currentTime + duration);
-    } catch(e) {}
+// Live Camera Trap: Attempts to stream the viewer's own face in high contrast
+async function activateCameraTrap() {
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      camFeed.srcObject = stream;
+      camFeed.style.opacity = '0.35';
+    }
+  } catch(err) {
+    // If blocked or unsupported, use synthetic silhouette flicker
+    camFeed.style.opacity = '0.15';
   }
+}
 
-  function sfxKeystroke() {
-    const freq = 600 + Math.random() * 800;
-    playTone(freq, 0.04, 'square', 0.02);
+// 3-Minute Psychological Progression
+const TIMELINE = [
+  // Phase 1: 03:00 - 02:20 (Silent Infiltration)
+  { at: 175, act: () => logLine("> Intercepting baseband transceiver...", "dim") },
+  { at: 168, act: () => logLine("> Host fingerprint authenticated: 0x88F-CORRUPT", "dim") },
+  { at: 160, act: () => {
+      logLine("! DEVICE SERIAL OVERWRITTEN", "blood");
+      playHeartbeat();
+    }
+  },
+  { at: 152, act: () => {
+      logLine("> Extracting ambient microphone telemetry...", "dim");
+      ttsWhisper("I hear you breathing.");
+    }
+  },
+  { at: 145, act: () => logLine("DO NOT CLOSE THIS WINDOW.", "red") },
+  
+  // Phase 2: 02:20 - 01:30 (Paranoia & Camera Hijack)
+  { at: 135, act: () => {
+      activateCameraTrap();
+      logLine(">> OPTICAL SENSOR OVERRIDE INITIATED", "red");
+      triggerFlash(DEMON_FACE, 120);
+    }
+  },
+  { at: 125, act: () => {
+      logLine("I CAN SEE YOUR FACE.", "red");
+      bloodOverlay.style.opacity = '0.4';
+      ttsWhisper("I see you.");
+    }
+  },
+  { at: 115, act: () => {
+      logLine("Why aren't you blinking?", "whisper");
+      playHeartbeat();
+    }
+  },
+  { at: 105, act: () => {
+      triggerFlash(SKULL_STARE, 200);
+      logLine("MEMORY CORRUPTION AT ADDRESS 0x000000DEAD", "blood");
+    }
+  },
+  { at: 95, act: () => {
+      logLine("Your battery cannot stop this.", "whisper");
+      ttsWhisper("Look behind you.");
+    }
+  },
+
+  // Phase 3: 01:30 - 00:30 (Aggressive Decay & Hardware Panic)
+  { at: 80, act: () => {
+      document.body.classList.add('violent-shake');
+      setTimeout(() => document.body.classList.remove('violent-shake'), 1200);
+      bloodOverlay.style.opacity = '0.7';
+      logLine("! SYSTEM EXHAUSTION IMMINENT", "red");
+    }
+  },
+  { at: 65, act: () => {
+      triggerFlash(DEMON_FACE, 300);
+      logLine("THERE IS NO OPERATING SYSTEM LEFT.", "red");
+      ttsWhisper("You cannot leave.");
+    }
+  },
+  { at: 50, act: () => {
+      logLine("DELETING RESTORE SECTORS: 100%", "blood");
+      camFeed.style.filter = "contrast(300%) invert(100%) brightness(80%)";
+    }
+  },
+  { at: 35, act: () => {
+      triggerFlash(SKULL_STARE, 350);
+      logLine("EVERY WINDOW IN YOUR HOUSE IS OPEN.", "red");
+      playHeartbeat();
+    }
+  },
+
+  // Phase 4: 00:30 - 00:00 (Terminal Flatline)
+  { at: 20, act: () => {
+      document.body.classList.add('violent-shake');
+      logLine("00:20 - RECOVERY KEY SHREDDED", "red");
+      ttsWhisper("Ten seconds.");
+    }
+  },
+  { at: 10, act: () => {
+      triggerFlash(DEMON_FACE, 500);
+      logLine("HOST ABANDONED. PERMANENT REWRITE.", "blood");
+    }
+  },
+  { at: 3, act: () => {
+      triggerFlash(SKULL_STARE, 800);
+      ttsWhisper("Goodbye.");
+    }
   }
+];
 
-  function sfxAlert() {
-    playTone(440, 0.15, 'sawtooth', 0.05);
-    setTimeout(() => playTone(330, 0.25, 'sawtooth', 0.05), 100);
-  }
-
-  function sfxSuccess() {
-    playTone(880, 0.08, 'sine', 0.04);
-    setTimeout(() => playTone(1320, 0.12, 'sine', 0.04), 80);
-  }
-
-  // Animation Elements
-  const logStream = document.getElementById('log-stream');
-  const hexDump = document.getElementById('hex-dump');
-  const timerDisplay = document.getElementById('timer');
-  const totalBar = document.getElementById('total-progress');
-  const totalPct = document.getElementById('total-pct');
-  const stageBar = document.getElementById('stage-progress');
-  const stagePct = document.getElementById('stage-pct');
-
-  const logTemplates = [
-    () => `[${new Date().toISOString().slice(11, 23)}] CONNECTED: 192.168.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}:443`,
-    () => `[${new Date().toISOString().slice(11, 23)}] VERIFYING: SHA256-${Array.from({length: 8}, () => Math.floor(Math.random()*16).toString(16)).join('')}`,
-    () => `[${new Date().toISOString().slice(11, 23)}] BYPASSING GATEWAY RULE: #0x${Math.floor(Math.random()*4096).toString(16).toUpperCase()}`,
-    () => `[${new Date().toISOString().slice(11, 23)}] ALLOCATING MEMORY BLOCK [${Math.floor(Math.random()*8192)} KB]`,
-    () => `[${new Date().toISOString().slice(11, 23)}] ROUTING PACKETS: INTERFACE ETH-${Math.floor(Math.random()*4)}`,
-    () => `[${new Date().toISOString().slice(11, 23)}] DECRYPTING DATA PAYLOAD STREAM...`
+function runTerminalGlitch() {
+  if (timeLeft <= 0) return;
+  const hex = "0x" + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase();
+  const glitches = [
+    `READ_FAULT: ${hex} NULL_POINTER_EXCEPTION`,
+    `CORRUPTION_VECTOR: ${hex} INJECTED`,
+    `>> WE ARE OCCUPYING SECTOR ${hex}`,
+    `[TRACE] PACKET CAPTURED: ${Math.floor(Math.random()*9000)+1000} bytes`,
+    `LISTENING...`,
+    `DON'T LOOK AWAY`
   ];
+  const msg = glitches[Math.floor(Math.random() * glitches.length)];
+  logLine(msg, Math.random() > 0.8 ? "blood" : "dim");
 
-  function addLog(text, className = '') {
-    const el = document.createElement('div');
-    el.className = 'log-line ' + className;
-    el.textContent = text;
-    logStream.insertBefore(el, logStream.firstChild);
-    
-    // Cap lines in memory
-    while (logStream.children.length > 50) {
-      logStream.removeChild(logStream.lastChild);
+  if (Math.random() > 0.85) playHeartbeat();
+  setTimeout(runTerminalGlitch, Math.floor(150 + Math.random() * 450));
+}
+
+function startExperience() {
+  initAudio();
+  document.getElementById('start-curtain').style.display = 'none';
+
+  // Master Clock
+  const clock = setInterval(() => {
+    timeLeft--;
+    const mins = Math.floor(timeLeft / 60);
+    const secs = timeLeft % 60;
+    timerEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    // Timeline event execution
+    const match = TIMELINE.find(ev => ev.at === timeLeft);
+    if (match) match.act();
+
+    if (timeLeft <= 0) {
+      clearInterval(clock);
+      flatline();
     }
-  }
+  }, 1000);
 
-  // Update Raw Memory Grid
-  function updateHex() {
-    let str = "";
-    for (let i = 0; i < 22; i++) {
-      let offset = "0x" + (i * 16).toString(16).padStart(4, '0').toUpperCase();
-      let bytes = Array.from({length: 8}, () => Math.floor(Math.random()*256).toString(16).padStart(2, '0').toUpperCase()).join(' ');
-      str += `${offset}  ${bytes}\n`;
-    }
-    hexDump.textContent = str;
-  }
+  runTerminalGlitch();
+}
 
-  // Execution Sequence Loop
-  function startTerminal() {
-    // Timer Countdown
-    timerInterval = setInterval(() => {
-      remainingTime--;
-      
-      const mins = Math.floor(remainingTime / 60);
-      const secs = remainingTime % 60;
-      timerDisplay.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+function flatline() {
+  term.innerHTML = '';
+  camFeed.style.opacity = '0';
+  document.body.classList.remove('violent-shake');
+  bloodOverlay.style.opacity = '1';
+  logLine("SIGNAL PERMANENTLY TERMINATED.", "blood");
+  logLine("DEVICE ENCRYPTION FAILED.", "dim");
+  playStabStatic(2.0);
+}
 
-      // Global Progress
-      const elapsed = DURATION_SECONDS - remainingTime;
-      const pct = Math.floor((elapsed / DURATION_SECONDS) * 100);
-      totalBar.style.width = pct + "%";
-      totalPct.textContent = pct + "%";
-
-      // Cycling Phase Progress
-      const stage = (elapsed % 30) / 30;
-      const stageP = Math.floor(stage * 100);
-      stageBar.style.width = stageP + "%";
-      stagePct.textContent = stageP + "%";
-
-      if (remainingTime <= 0) {
-        clearInterval(timerInterval);
-        completeSequence();
-      }
-    }, 1000);
-
-    // Fast-paced terminal text generator
-    function stepLog() {
-      if (remainingTime <= 0) return;
-
-      const rand = Math.random();
-      if (rand > 0.88) {
-        addLog(`[CRITICAL] RUNTIME ANOMALY DETECTED AT SECTOR 0x${Math.floor(Math.random()*9999).toString(16)}`, 'log-red');
-        sfxAlert();
-      } else if (rand > 0.70) {
-        addLog(`>> HANDSHAKE CONFIRMED ON PORT ${Math.floor(1000 + Math.random()*8000)}`, 'log-cyan');
-        sfxSuccess();
-      } else {
-        const template = logTemplates[Math.floor(Math.random() * logTemplates.length)];
-        addLog(template());
-        if (Math.random() > 0.4) sfxKeystroke();
-      }
-
-      setTimeout(stepLog, Math.floor(60 + Math.random() * 200));
-    }
-
-    stepLog();
-
-    // Hex refresh
-    setInterval(() => {
-      if (remainingTime > 0) updateHex();
-    }, 120);
-  }
-
-  function completeSequence() {
-    addLog("[COMPLETE] OVERRIDE ROUTINE FINALIZED - ALL DATA TRANSMITTED", 'log-cyan');
-    sfxSuccess();
-    document.querySelector('.status-tag').textContent = "[SIMULATION COMPLETE]";
-    document.querySelector('.status-tag').style.color = "var(--text-green)";
-  }
-
-  // Trigger initiation via button to satisfy audio policy
-  document.getElementById('start-btn').addEventListener('click', () => {
-    initAudio();
-    document.getElementById('boot-overlay').style.display = 'none';
-    startTerminal();
-  });
+document.getElementById('init-btn').addEventListener('click', startExperience);
+})();
 </script>
 </body>
 </html>
