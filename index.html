@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#050000">
+<title>DEAD SIGNAL // SYSTEM COMPROMISED</title>
+<style>
+:root {
+  --r: #ff1a1a;
+  --dr: #660000;
+  --g: #00ff66;
+  --c: #00e5ff;
+  --y: #ffb700;
+  --w: #e0e0e0;
+  --d: #444444;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #030000;
+  color: var(--w);
+  font-family: "Courier New", Courier, monospace;
+  font-size: clamp(12px, 3.2vw, 15px);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* CRT Overlay & Scanlines */
+body::before {
+  content: " ";
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.4) 50%),
+              linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  z-index: 20;
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+
+/* Screen Vignette */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 55%, rgba(0,0,0,0.85) 100%);
+  pointer-events: none;
+  z-index: 21;
+}
+
+#term {
+  position: fixed;
+  inset: 0;
+  padding: 16px 14px 75px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.45;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+#term div { min-height: 1.35em; }
+
+.r { color: var(--r); text-shadow: 0 0 6px rgba(255, 26, 26, 0.7); }
+.dr { color: var(--dr); }
+.g { color: var(--g); text-shadow: 0 0 5px rgba(0, 255, 102, 0.5); }
+.c { color: var(--c); }
+.y { color: var(--y); }
+.w { color: var(--w); }
+.d { color: var(--d); }
+.b { font-weight: 800; }
+
+body.shake { animation: jitter 0.08s infinite alternate; }
+@keyframes jitter {
+  0% { transform: translate(-2px, 1px) skewX(0.5deg); }
+  100% { transform: translate(2px, -1px) skewX(-0.5deg); }
+}
+
+body.panic {
+  box-shadow: inset 0 0 150px rgba(255, 0, 0, 0.6);
+  filter: contrast(140%) brightness(110%);
+}
+
+#start {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: #020000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+
+#brand {
+  font-weight: 900;
+  font-size: clamp(28px, 9vw, 54px);
+  letter-spacing: 0.18em;
+  color: var(--r);
+  text-shadow: 0 0 20px rgba(255, 26, 26, 0.8), 0 0 40px rgba(102, 0, 0, 0.6);
+  margin-bottom: 0.3em;
+}
+
+#sub {
+  color: var(--d);
+  letter-spacing: 0.4em;
+  font-size: 0.85em;
+  margin-bottom: 2em;
+}
+
+#go {
+  background: transparent;
+  color: var(--r);
+  border: 1px solid var(--r);
+  padding: 14px 40px;
+  font: inherit;
+  font-weight: bold;
+  letter-spacing: 0.35em;
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(255, 26, 26, 0.3);
+  transition: all 0.2s ease;
+}
+
+#go:hover {
+  background: var(--r);
+  color: #000;
+  box-shadow: 0 0 25px rgba(255, 26, 26, 0.8);
+}
+
+#inrow {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  display: none;
+  background: rgba(10, 0, 0, 0.95);
+  border-top: 1px solid var(--dr);
+  padding: 12px;
+  align-items: center;
+  gap: 8px;
+}
+
+#lbl { color: var(--r); font-weight: bold; }
+#inp {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--g);
+  font: inherit;
+  font-size: 15px;
+}
+</style>
+</head>
+<body>
+
+<div id="term"></div>
+<div id="inrow"><span id="lbl"></span><input id="inp" autocomplete="off" spellcheck="false"></div>
+
+<div id="start">
+  <div id="brand">DEAD SIGNAL</div>
+  <div id="sub">// ENTITY INTERFACE INITIALIZER //</div>
+  <button id="go">INITIALIZE</button>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const SPEED = 1.0;
+const term = document.getElementById('term');
+const inrow = document.getElementById('inrow');
+const lbl = document.getElementById('lbl');
+const inp = document.getElementById('inp');
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const wait = s => sleep(s * 1000 * SPEED);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const ri = (a, b) => Math.floor(rnd(a, b + 1));
+const rhex = n => Array.from({length: n}, () => '0123456789abcdef'[ri(0, 15)]).join('');
+const rip = () => [0,0,0,0].map(() => ri(12, 240)).join('.');
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const S = (t, c) => `<span class="${c}">${esc(t)}</span>`;
+const pad = (s, n) => String(s).padEnd(n);
+
+function ts() {
+  const d = new Date();
+  return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+
+function cols() {
+  const fs = parseFloat(getComputedStyle(term).fontSize) || 13;
+  return Math.max(26, Math.floor((term.clientWidth - 20) / (fs * 0.6)));
+}
+
+function line(html, cls) {
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.innerHTML = html || ' ';
+  term.appendChild(d);
+  term.scrollTop = term.scrollHeight;
+  return d;
+}
+
+function clear() { term.innerHTML = ''; }
+
+const JUNK = '▓▒░§Ж#@%$?!/\\†‡☠';
+function glitch(t, p = 0.25) {
+  return [...t].map(c => (c !== ' ' && Math.random() < p) ? JUNK[ri(0, JUNK.length - 1)] : c).join('');
+}
+
+let ac = null;
+function initAudio() {
+  try {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+  } catch (e) { ac = null; }
+}
+
+function tone(f, d, v = 0.2, type = 'sine', at = 0) {
+  if (!ac) return;
+  const t = ac.currentTime + at;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(v, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(ac.destination);
+  o.start(t); o.stop(t + d + 0.05);
+}
+
+function noise(d, v = 0.2) {
+  if (!ac) return;
+  const n = Math.floor(ac.sampleRate * d);
+  const b = ac.createBuffer(1, n, ac.sampleRate);
+  const a = b.getChannelData(0);
+  for (let i = 0; i < n; i++) a[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const s = ac.createBufferSource(); s.buffer = b;
+  const g = ac.createGain(); g.gain.value = v;
+  s.connect(g); g.connect(ac.destination); s.start();
+}
+
+function darkDrone(d = 8) {
+  if (!ac) return;
+  const t = ac.currentTime;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.001, t);
+  g.gain.exponentialRampToValueAtTime(0.3, t + 2);
+  g.gain.setValueAtTime(0.3, t + d - 2);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+
+  [40, 42.5, 85].forEach(freq => {
+    const o = ac.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = freq;
+    o.connect(g);
+    o.start(t);
+    o.stop(t + d);
+  });
+  g.connect(ac.destination);
+}
+
+const sfx = {
+  beep() { tone(1400, 0.07, 0.1, 'square'); },
+  alarm() { [900, 450, 900, 450].forEach((f, i) => tone(f, 0.15, 0.15, 'sawtooth', i * 0.18)); },
+  static() { noise(1.2, 0.3); },
+  heartbeat() {
+    tone(45, 0.18, 0.8, 'sine');
+    tone(38, 0.22, 0.8, 'sine', 0.28);
+  },
+  drone() { darkDrone(8); }
+};
+
+function speak(text) {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.pitch = 0.2;
+    u.rate = 0.65;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+async function typewrite(text, cls = 'd', delay = 35) {
+  const d = line('', cls);
+  let out = '';
+  for (const ch of text) {
+    out += ch;
+    d.textContent = out;
+    await sleep(delay * SPEED * rnd(0.5, 1.4));
+  }
+  return d;
+}
+
+async function glitchPrint(text, cls = 'r', times = 8) {
+  const d = line('', cls + ' b');
+  for (let i = 0; i < times; i++) {
+    d.textContent = glitch(text, 0.35);
+    await sleep(65);
+  }
+  d.textContent = text;
+  return d;
+}
+
+async function log(tag, msg, cls = 'g', delay = 0.22) {
+  line(`${S(ts(), 'd')} ${S('[' + tag + ']', cls + ' b')} ${msg}`);
+  if (['ENTITY', 'BREACH', 'ROOT'].includes(tag)) sfx.alarm();
+  else if (tag === 'OK') sfx.beep();
+  await wait(delay * rnd(0.7, 1.4));
+}
+
+async function bar(label, cls = 'r', speed = 120) {
+  const d = line('');
+  const steps = 22;
+  for (let i = 0; i <= steps; i++) {
+    d.innerHTML = S(pad(label, 14), 'w') + S('█'.repeat(i), cls) + S('░'.repeat(steps - i), 'd')
+      + ' ' + S(String(Math.floor(i / steps * 100)).padStart(3) + '%', 'w');
+    await sleep(speed * SPEED * rnd(0.3, 1.8));
+  }
+}
+
+async function flicker(times = 6) {
+  sfx.static();
+  document.body.classList.add('shake');
+  for (let i = 0; i < times; i++) {
+    clear();
+    if (i % 2 === 0) {
+      for (let k = 0; k < ri(5, 10); k++) line(S(glitch('█'.repeat(cols()), 0.5), 'r'));
+    }
+    await sleep(rnd(40, 160));
+  }
+  clear();
+  document.body.classList.remove('shake');
+}
+
+const SKULL = String.raw`
+                 .ed"""" """$$$$be.
+               -"           ^""**$$$e.
+             ."                   '$$$c
+            /                      "4$$b
+           d  3                      $$$$
+           $  *                   .$$$$$$
+          .$  ^c           $$$$$e$$$$$$$$.
+          d$L  4.         4$$$$$$$$$$$$$$b
+          $$$$b ^ceeeee.  4$$ECL.F*$$$$$$$
+  e$""=. $$$$$$d$$$$$$$d  $$$$$$$d$$$$$$$P
+  $---   *$$$$$$$$$$$$$$  "$$$$$$$###$$$"
+          "$$$C***$$$$*"    "$$$$$$$$$$"
+           ^r" =*""         '$$$$$$$$$P
+            '                 "$$$$$$P
+                               '$$$$P
+`;
+
+function askLine(promptHtml) {
+  return new Promise(res => {
+    lbl.innerHTML = promptHtml;
+    inrow.style.display = 'flex';
+    inp.value = '';
+    inp.focus();
+    const handler = e => {
+      if (e.key === 'Enter') {
+        inp.removeEventListener('keydown', handler);
+        const v = inp.value.trim();
+        inrow.style.display = 'none';
+        res(v);
+      }
+    };
+    inp.addEventListener('keydown', handler);
+  });
+}
+
+async function intro() {
+  clear();
+  sfx.drone();
+  await wait(1.2);
+  const steps = [
+    '> establish low-frequency peer link...',
+    '> handshake bypassed.',
+    '> foreign signature intercepted.',
+    '> port 0: unauthorized observer presence detected.'
+  ];
+  for (const step of steps) {
+    await typewrite(step, 'd', 45);
+    await wait(0.8);
+  }
+  await wait(0.8);
+  speak('I am inside.');
+  sfx.static();
+  await glitchPrint('> AN UNKNOWN PRESENCE CLAIMS OWNERSHIP.', 'r', 12);
+  await wait(1.5);
+}
+
+async function horror(name) {
+  await flicker(6);
+  sfx.drone();
+  line(S(SKULL, 'dr b'));
+  await wait(1.5);
+
+  const lines = [
+    `I SEE YOU, ${name.toUpperCase()}.`,
+    'LOOK AWAY FROM THE SCREEN.',
+    'I CAN HEAR YOUR BREATHING.',
+    'THE CAMERA CANNOT SAVE YOU.',
+    'THERE IS NO DISCONNECT BUTTON.'
+  ];
+
+  for (let i = 0; i < lines.length; i++) {
+    speak(lines[i].toLowerCase());
+    await typewrite('  ' + lines[i], 'r b', 80);
+    sfx.heartbeat();
+    await wait(2.0);
+    if (i % 2 === 1) {
+      await flicker(3);
+      line(S(SKULL, 'r b'));
+    }
+  }
+}
+
+async function countdown(n = 20) {
+  clear();
+  const alerts = {
+    18: "Purging shadow copies...",
+    12: "Disabling device peripherals...",
+    6: "Core dump irrecoverable.",
+    2: "Goodbye."
+  };
+  const d = line('');
+  for (let i = n; i >= 0; i--) {
+    term.appendChild(d);
+    d.innerHTML = S(`  SYSTEM PURGE COMMENCING IN: 00:${String(i).padStart(2, '0')}  `, (i % 2 === 0 ? 'r' : 'w') + ' b');
+    if (alerts[i]) {
+      line(`${S(ts(), 'd')} ${S('[!]', 'r b')} ${esc(alerts[i])}`);
+      term.appendChild(d);
+    }
+    if (i <= 5) {
+      sfx.alarm();
+      document.body.classList.add('panic');
+    } else {
+      sfx.beep();
+    }
+    term.scrollTop = term.scrollHeight;
+    await wait(1);
+  }
+  document.body.classList.remove('panic');
+  await flicker(8);
+  clear();
+  await wait(1.5);
+}
+
+async function main() {
+  initAudio();
+  document.getElementById('start').style.display = 'none';
+
+  try {
+    await intro();
+    let name = await askLine(S('TARGET_NAME> ', 'y b'));
+    if (!name) name = 'OBSERVER';
+    line(S('TARGET_NAME> ', 'y b') + esc(name));
+    await typewrite('  target logged: ' + name, 'y', 40);
+    await wait(1);
+
+    clear();
+    await log('SCAN', 'Executing unauthorized network audit', 'c');
+    await bar('Infiltrating', 'r', 130);
+    await log('ENTITY', 'Host telemetry mirrored', 'r');
+    await wait(1.2);
+
+    await horror(name);
+    await countdown(15);
+
+    clear();
+    line(S('SIGNAL LOST. ROOT HOST UNRESPONSIVE.', 'r b'));
+    line('');
+    const restart = line(S('[ RECONNECT ]', 'd'));
+    restart.style.cursor = 'pointer';
+    restart.addEventListener('click', () => location.reload());
+  } catch (e) {
+    line(S('[!] ' + e.message, 'r'));
+  }
+}
+
+document.getElementById('go').addEventListener('click', main, {once: true});
+})();
+</script>
+</body>
+</html>
