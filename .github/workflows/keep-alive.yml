@@ -1,0 +1,23 @@
+name: Keep Alive Loop
+
+on:
+  schedule:
+    # Triggers roughly every 5 minutes (the shortest interval GitHub allows)
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-loop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request URL Every 20 Seconds
+        run: |
+          # Runs for 4 minutes (240s) so it finishes before the next cron fires
+          END_TIME=$((SECONDS + 240))
+
+          while [ $SECONDS -lt $END_TIME ]; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://deadsig-web.onrender.com)
+            echo "[$(date -u +'%T')] Pinged Render - HTTP Status: $STATUS"
+            sleep 20
+          done
+          
